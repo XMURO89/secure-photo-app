@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kamera ile Fotoğraf Yakala</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding: 24px; background:#f7fafc; color:#111827; }
+    .card { background:white; border-radius:12px; padding:18px; box-shadow:0 6px 18px rgba(15,23,42,0.08); max-width:900px; margin:auto; }
+    header { display:flex; gap:12px; align-items:center; margin-bottom:12px; }
+    h1 { font-size:1.25rem; margin:0; }
+    p.lead { margin:6px 0 18px; color:#374151; }
+    video { width:100%; border-radius:8px; background:#000; max-height:480px; object-fit:cover; }
+    canvas { display:none; }
+    .controls { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+    button, a.button { background:#0ea5a4; color:white; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:8px; }
+    button.secondary { background:#64748b; }
+    small.note { display:block; color:#6b7280; margin-top:10px; }
+    .thumb { margin-top:12px; max-width:100%; border-radius:8px; box-shadow:0 4px 12px rgba(2,6,23,0.06); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <header>
+      <h1>Kamera ile Fotoğraf Yakala</h1>
+    </header>
+    <p class="lead">Bu sayfa, <strong>kullanıcının izniyle</strong> web kamerasından canlı görüntü ister ve istenirse bir fotoğraf (snapshot) alır. Kullanıcının rızası olmadan kamera erişimi sağlanmaz.</p>
+
+    <video id="preview" autoplay playsinline></video>
+    <canvas id="snapCanvas"></canvas>
+    <img id="thumb" class="thumb" alt="Yakalanan küçük önizleme" style="display:none;" />
+
+    <div class="controls">
+      <button id="startBtn">Kamerayı Başlat</button>
+      <button id="captureBtn" class="secondary" disabled>Fotoğraf Çek</button>
+      <a id="downloadLink" class="button" style="display:none;" download="kamera-fotograf.png">Fotoğrafı İndir</a>
+      <button id="stopBtn" class="secondary" disabled>Durdur</button>
+    </div>
+
+    <small class="note">Not: Tarayıcı kamera izin penceresi gösterir — kullanıcı izin vermezse hiçbir görüntü yakalanmaz. Mobil tarayıcılarda kamera davranışı farklı olabilir.</small>
+  </div>
+
+  <script>
+    const startBtn = document.getElementById('startBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const downloadLink = document.getElementById('downloadLink');
+    const preview = document.getElementById('preview');
+    const canvas = document.getElementById('snapCanvas');
+    const thumb = document.getElementById('thumb');
+
+    let cameraStream = null;
+
+    async function startCamera() {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+          audio: false
+        });
+        preview.srcObject = cameraStream;
+        preview.onloadedmetadata = () => preview.play();
+
+        captureBtn.disabled = false;
+        stopBtn.disabled = false;
+        startBtn.disabled = true;
+        downloadLink.style.display = 'none';
+        thumb.style.display = 'none';
+      } catch (err) {
+        console.error('Kamera başlatılamadı:', err);
+        alert('Kamera erişimi verilmedi veya desteklenmiyor. Konsolu kontrol et.');
+      }
+    }
+
+    function capturePhoto() {
+      if (!cameraStream) return alert('Önce kamerayı başlatın.');
+
+      const track = cameraStream.getVideoTracks()[0];
+      const settings = track.getSettings ? track.getSettings() : {};
+      const width = preview.videoWidth || settings.width || 1280;
+      const height = preview.videoHeight || settings.height || 720;
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(preview, 0, 0, width, height);
+
+      canvas.toBlob(blob => {
+        if (!blob) return alert('Fotoğraf alınamadı.');
+        const url = URL.createObjectURL(blob);
+        downloadLink.href = url;
+        downloadLink.style.display = 'inline-flex';
+
+        // küçük önizleme göster
+        thumb.src = url;
+        thumb.style.display = 'block';
+      }, 'image/png');
+    }
+
+    function stopCamera() {
+      if (!cameraStream) return;
+      cameraStream.getTracks().forEach(t => t.stop());
+      cameraStream = null;
+      preview.srcObject = null;
+
+      captureBtn.disabled = true;
+      stopBtn.disabled = true;
+      startBtn.disabled = false;
+      downloadLink.style.display = 'none';
+      thumb.style.display = 'none';
+    }
+
+    startBtn.addEventListener('click', startCamera);
+    captureBtn.addEventListener('click', capturePhoto);
+    stopBtn.addEventListener('click', stopCamera);
+
+    window.addEventListener('beforeunload', () => {
+      if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+    });
+  </script>
+</body>
+</html>
